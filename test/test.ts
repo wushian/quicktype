@@ -164,6 +164,15 @@ abstract class JSONFixture extends Fixture {
     return { priority, others };
   }
 
+  async generateOutput(sourceFile: string) {
+    // Generate code from the sample
+    await quicktype({
+      src: [sourceFile],
+      out: this.output,
+      topLevel: this.topLevel
+    });
+  }
+
   async runWithSample(sample: string, index: number, total: number) {
     const cwd = this.getRunDirectory();
     let sampleFile = path.basename(sample);
@@ -179,12 +188,7 @@ abstract class JSONFixture extends Fixture {
     shell.cp(sample, cwd);
 
     await inDir(cwd, async () => {
-      // Generate code from the sample
-      await quicktype({
-        src: [sampleFile],
-        out: this.output,
-        topLevel: this.topLevel
-      });
+      await this.generateOutput(sampleFile);
 
       try {
         await this.test(sampleFile);
@@ -203,12 +207,7 @@ abstract class JSONFixture extends Fixture {
         });
         // Quicktype from the schema and compare to expected code
         shell.mv(this.output, `${this.output}.expected`);
-        await quicktype({
-          src: ["schema.json"],
-          srcLang: "schema",
-          out: this.output,
-          topLevel: this.topLevel
-        });
+        await this.generateOutput("schema.json");
 
         // Compare fixture.output to fixture.output.expected
         exec(
@@ -369,8 +368,8 @@ class ElmJSONFixture extends JSONFixture {
 // Swift tests
 /////////////////////////////////////
 
-class SwiftJSONFixture extends JSONFixture {
-  name = "swift";
+class Swift3JSONFixture extends JSONFixture {
+  name = "swift3";
   base = "test/fixtures/swift";
   diffViaSchema = false;
   output = "quicktype.swift";
@@ -378,7 +377,35 @@ class SwiftJSONFixture extends JSONFixture {
   skip = ["identifiers.json", "no-classes.json", "blns-object.json"];
 
   async test(sample: string) {
-    exec(`swiftc -o quicktype main.swift quicktype.swift`);
+    exec(`swiftc -o quicktype main.swift ${this.output}`);
+    compareJsonFileToJson({
+      expectedFile: sample,
+      jsonCommand: `./quicktype "${sample}"`,
+      strict: false
+    });
+  }
+}
+
+class Swift4JSONFixture extends JSONFixture {
+  name = "swift4";
+  base = "test/fixtures/swift";
+  diffViaSchema = false;
+  output = "quicktype.swift";
+  topLevel = "TopLevel";
+  skip = ["identifiers.json", "no-classes.json", "blns-object.json"];
+
+  async generateOutput(sourceFile: string) {
+    // Generate code from the sample
+    await quicktype({
+      src: [sourceFile],
+      out: "quicktype.swift4",
+      topLevel: this.topLevel
+    });
+    shell.mv("quicktype.swift4", this.output);
+  }
+
+  async test(sample: string) {
+    exec(`swiftc -o quicktype main.swift ${this.output}`);
     compareJsonFileToJson({
       expectedFile: sample,
       jsonCommand: `./quicktype "${sample}"`,
@@ -483,7 +510,8 @@ const FIXTURES: Fixture[] = [
   new GoJSONFixture(),
   new JSONSchemaJSONFixture(),
   new ElmJSONFixture(),
-  new SwiftJSONFixture(),
+  new Swift3JSONFixture(),
+  new Swift4JSONFixture(),
   new TypeScriptJSONFixture(),
   new JSONSchemaFixture()
 ].filter(
