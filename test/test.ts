@@ -409,7 +409,8 @@ class Swift4JSONFixture extends JSONFixture {
     compareJsonFileToJson({
       expectedFile: sample,
       jsonCommand: `./quicktype "${sample}"`,
-      strict: false
+      strict: false,
+      allowMissingNull: true
     });
   }
 }
@@ -575,6 +576,7 @@ type ComparisonArgs = {
   jsonFile?: string;
   jsonCommand?: string;
   strict: boolean;
+  allowMissingNull?: boolean;
 };
 
 function compareJsonFileToJson(args: ComparisonArgs) {
@@ -599,12 +601,14 @@ function compareJsonFileToJson(args: ComparisonArgs) {
     () => JSON.parse(fs.readFileSync(expectedFile, "utf8"))
   );
 
+  const allowMissingNull =
+    args.allowMissingNull === undefined ? false : args.allowMissingNull;
   let jsonAreEqual = strict
     ? callAndReportFailure("Failed to strictly compare objects", () =>
         strictDeepEquals(givenJSON, expectedJSON)
       )
     : callAndReportFailure("Failed to compare objects.", () =>
-        deepEquals(expectedJSON, givenJSON)
+        deepEquals(expectedJSON, givenJSON, allowMissingNull)
       );
 
   if (!jsonAreEqual) {

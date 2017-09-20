@@ -121,7 +121,7 @@ swift3Doc = do
         renderUnionExtension3 unionName unionRep
 
     blank
-    supportFunctions
+    supportFunctions3
 
 swift4Doc :: Doc Unit
 swift4Doc = do
@@ -143,9 +143,12 @@ swift4Doc = do
     forEachUnion_ \unionName unionRep -> do
         blank
         renderUnionExtension4 unionName unionRep
+    
+    blank
+    supportFunctions4
 
-supportFunctions :: Doc Unit
-supportFunctions = do
+supportFunctions3 :: Doc Unit
+supportFunctions3 = do
     line """// Helpers
 
 fileprivate func convertArray<T>(_ converter: (Any) -> T?, _ json: Any) -> [T]? {
@@ -227,6 +230,26 @@ fileprivate func checkNull(_ v: Any?) -> NSNull? {
     return .some(NSNull())
 }"""
 
+supportFunctions4 :: Doc Unit
+supportFunctions4 = do
+    line """// Helpers
+
+class MyNull: Codable {
+    public required init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if !container.decodeNil() {
+            throw DecodingError.typeMismatch(MyNull.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for MyNull"))
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encodeNil()
+    }
+}
+
+typealias MyAny = MyNull"""
+
 renderUnion :: IRUnionRep -> Doc String
 renderUnion ur =
     case nullableFromUnion ur of
@@ -238,8 +261,8 @@ renderUnion ur =
 renderType :: IRType -> Doc String
 renderType = case _ of
     IRNoInformation -> pure "FIXME_THIS_SHOULD_NOT_HAPPEN"
-    IRAnyType -> pure "Any?"
-    IRNull -> pure "NSNull"
+    IRAnyType -> pure "MyAny?"
+    IRNull -> pure "MyNull"
     IRInteger -> pure "Int"
     IRDouble -> pure "Double"
     IRBool -> pure "Bool"
@@ -490,14 +513,15 @@ renderClassExtension3 className properties = do
 renderClassExtension4 :: String -> Map String IRType -> Doc Unit
 renderClassExtension4 className properties = do
     let propertyNames = makePropertyNames properties "" keywords
-    line $ "extension " <> className <> " {"
-    indent do
-        line "enum CodingKeys : String, CodingKey {"
+    when (M.size propertyNames > 0) do
+        line $ "extension " <> className <> " {"
         indent do
-            for_ (M.toUnfoldable propertyNames :: Array (Tuple String String)) \(Tuple jsonName swiftName) -> do
-                line $ "case " <> swiftName <> " = \"" <> stringEscape jsonName <> "\""
+            line "enum CodingKeys : String, CodingKey {"
+            indent do
+                for_ (M.toUnfoldable propertyNames :: Array (Tuple String String)) \(Tuple jsonName swiftName) -> do
+                    line $ "case " <> swiftName <> " = \"" <> stringEscape jsonName <> "\""
+            line "}"
         line "}"
-    line "}"
 
 makePropertyNames :: Map String IRType -> String -> Array String -> Map String String
 makePropertyNames properties suffix forbidden =
